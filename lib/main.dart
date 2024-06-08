@@ -32,6 +32,8 @@ class _HomePageState extends State<HomePage> {
   final ImagePicker _picker = ImagePicker();
   File? _image;
   bool _uploading = false;
+  String? _imageUrl;
+  String? _errorMessage;
 
   Future<void> _getImage(ImageSource source) async {
     final pickedFile = await _picker.pickImage(source: source, imageQuality: 50);
@@ -46,6 +48,7 @@ class _HomePageState extends State<HomePage> {
     if (imageConstraints(file)) {
       setState(() {
         _image = file;
+        _errorMessage = null; // Clear error message if any
       });
     }
   }
@@ -54,55 +57,33 @@ class _HomePageState extends State<HomePage> {
     final validExtensions = ['jpg', 'jpeg', 'bmp'];
 
     if (!validExtensions.contains(image.path.split('.').last.toLowerCase())) {
-      _showAlertDialog(
-        title: "Error Uploading!",
-        content: "Image format should be jpg/jpeg/bmp.",
-      );
+      setState(() {
+        _errorMessage = "Image format should be jpg/jpeg/bmp.";
+      });
       return false;
     }
 
     if (image.lengthSync() > 100000) {
-      _showAlertDialog(
-        title: "Error Uploading!",
-        content: "Image Size should be less than 100KB.",
-      );
+      setState(() {
+        _errorMessage = "Image Size should be less than 100KB.";
+      });
       return false;
     }
 
     return true;
   }
 
-  void _showAlertDialog({required String title, required String content}) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(title),
-          content: Text(content),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              child: Text('OK'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   Future<void> _uploadImage() async {
     if (_image == null) {
-      _showAlertDialog(
-        title: "Error Uploading!",
-        content: "No Image was selected.",
-      );
+      setState(() {
+        _errorMessage = "No Image was selected.";
+      });
       return;
     }
 
     setState(() {
       _uploading = true;
+      _errorMessage = null; // Clear error message if any
     });
 
     try {
@@ -116,26 +97,45 @@ class _HomePageState extends State<HomePage> {
 
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
-        _showAlertDialog(
-          title: "Image Sent!",
-          content: result['message'],
-        );
+        setState(() {
+          _imageUrl = result['imageUrl'];
+          _errorMessage = null; // Clear error message if any
+        });
+        _showSuccessDialog(result['message']);
       } else {
-        _showAlertDialog(
-          title: "Error Uploading!",
-          content: "Server Side Error.",
-        );
+        setState(() {
+          _errorMessage = "Server Side Error.";
+        });
       }
     } catch (e) {
-      _showAlertDialog(
-        title: "Error Uploading!",
-        content: "An error occurred: $e",
-      );
+      setState(() {
+        _errorMessage = "An error occurred: $e";
+      });
     }
 
     setState(() {
       _uploading = false;
     });
+  }
+
+  void _showSuccessDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Image Sent!"),
+          content: Text(message),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -147,108 +147,57 @@ class _HomePageState extends State<HomePage> {
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(8.0),
-          child: _uploading
-              ? CircularProgressIndicator()
-              : Column(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    GestureDetector(
-                      onTap: () {
-                        _getImage(ImageSource.camera);
-                      },
-                      child: CircleAvatar(
-                        radius: MediaQuery.of(context).size.width / 6,
-                        backgroundColor: Colors.grey,
-                        backgroundImage: _image != null
-                            ? FileImage(_image!)
-                            : AssetImage('assets/camera_img.png') as ImageProvider,
-                      ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _image != null
+                  ? CircleAvatar(
+                      radius: MediaQuery.of(context).size.width / 6,
+                      backgroundColor: Colors.grey,
+                      backgroundImage: FileImage(_image!),
+                    )
+                  : CircleAvatar(
+                      radius: MediaQuery.of(context).size.width / 6,
+                      backgroundColor: Colors.grey,
+                      child: Icon(Icons.camera_alt, size: 50),
                     ),
-                    SizedBox(height: 20),
-                    ElevatedButton(
-                      onPressed: () {
-                        bottomPickerSheet(context, _getImage, _getImageFromGallery);
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.add_photo_alternate),
-                            SizedBox(width: 5),
-                            Text('Select Image'),
-                          ],
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 20),
-                    ElevatedButton(
-                      onPressed: _uploadImage,
-                      child: Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.file_upload),
-                            SizedBox(width: 5),
-                            Text('Upload Image'),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
+              SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () {
+                  _getImage(ImageSource.camera);
+                },
+                child: Text('Take Photo'),
+              ),
+              SizedBox(height: 10),
+              ElevatedButton(
+                onPressed: () {
+                  _getImage(ImageSource.gallery);
+                },
+                child: Text('Choose from Gallery'),
+              ),
+              SizedBox(height: 20),
+              if (_errorMessage != null)
+                Text(
+                  _errorMessage!,
+                  style: TextStyle(color: Colors.red),
                 ),
+              SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _uploadImage,
+                child: _uploading
+                    ? CircularProgressIndicator()
+                    : Text('Upload Image'),
+              ),
+              SizedBox(height: 20),
+              if (_imageUrl != null)
+                Image.network(
+                  _imageUrl!,
+                  height: 200,
+                ),
+            ],
+          ),
         ),
       ),
     );
   }
-}
-
-void bottomPickerSheet(BuildContext context, Function _imageFromCamera,
-    Function _imageFromGallery) {
-  showModalBottomSheet(
-      context: context,
-      builder: (BuildContext bc) {
-        return SafeArea(
-            child: Wrap(
-          children: [
-            ListTile(
-              leading: Icon(Icons.photo_camera),
-              title: Text('Camera'),
-              onTap: () {
-                _imageFromCamera();
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              leading: Icon(Icons.photo_library),
-              title: Text('Gallery'),
-              onTap: () {
-                _imageFromGallery();
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              leading: Icon(Icons.image),
-              title: Text('Local Machine'),
-              onTap: () {
-                // Implement selecting image from local machine
-                Navigator.pop(context);
-              },
-            ),
-          ],
-        ));
-      });
-}
-
-Future<void> _getImageFromGallery() async {
-  final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 50);
-  if (pickedFile == null) {
-    print('No image selected.');
-    return;
-  }
-
-  final File file = File(pickedFile.path);
-  // You can handle the picked image file here
 }
