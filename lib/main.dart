@@ -30,7 +30,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final ImagePicker _picker = ImagePicker();
-  late File _image;
+  File? _image;
   bool _uploading = false;
 
   Future<void> _getImage(ImageSource source) async {
@@ -109,8 +109,8 @@ class _HomePageState extends State<HomePage> {
       final response = await http.post(
         Uri.parse('https://pcc.edu.pk/ws/file_upload.php'),
         body: {
-          "image": base64Encode(await _image.readAsBytes()),
-          "name": _image.path.split('/').last,
+          "image": base64Encode(await _image!.readAsBytes()),
+          "name": _image!.path.split('/').last,
         },
       );
 
@@ -161,8 +161,25 @@ class _HomePageState extends State<HomePage> {
                         radius: MediaQuery.of(context).size.width / 6,
                         backgroundColor: Colors.grey,
                         backgroundImage: _image != null
-                            ? FileImage(_image)
-                            : AssetImage('assets/camera_img.png'),
+                            ? FileImage(_image!)
+                            : AssetImage('assets/camera_img.png') as ImageProvider,
+                      ),
+                    ),
+                    SizedBox(height: 20),
+                    ElevatedButton(
+                      onPressed: () {
+                        bottomPickerSheet(context, _getImage, _getImageFromGallery);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.add_photo_alternate),
+                            SizedBox(width: 5),
+                            Text('Select Image'),
+                          ],
+                        ),
                       ),
                     ),
                     SizedBox(height: 20),
@@ -186,4 +203,52 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+}
+
+void bottomPickerSheet(BuildContext context, Function _imageFromCamera,
+    Function _imageFromGallery) {
+  showModalBottomSheet(
+      context: context,
+      builder: (BuildContext bc) {
+        return SafeArea(
+            child: Wrap(
+          children: [
+            ListTile(
+              leading: Icon(Icons.photo_camera),
+              title: Text('Camera'),
+              onTap: () {
+                _imageFromCamera();
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.photo_library),
+              title: Text('Gallery'),
+              onTap: () {
+                _imageFromGallery();
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.image),
+              title: Text('Local Machine'),
+              onTap: () {
+                // Implement selecting image from local machine
+                Navigator.pop(context);
+              },
+            ),
+          ],
+        ));
+      });
+}
+
+Future<void> _getImageFromGallery() async {
+  final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 50);
+  if (pickedFile == null) {
+    print('No image selected.');
+    return;
+  }
+
+  final File file = File(pickedFile.path);
+  // You can handle the picked image file here
 }
